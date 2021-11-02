@@ -34,6 +34,9 @@ type TargetBuilder interface {
 	SetSeed(context.Context, string) TargetBuilder
 	// SetShoot updates TargetBuilder with a Shoot name
 	SetShoot(context.Context, string) TargetBuilder
+	// SetTargetOptionSeed tries to target a shoot that belongs to a seed
+	// It requires a shoot to be successfully targeted
+	SetTargetOptionSeed(ctx context.Context) TargetBuilder
 	// Build uses the values set for TargetBuilder to create and return a new target
 	// This function validates the target values and tries to complete missing values
 	// If the provided values do not represent a valid and unique target, an error is returned
@@ -182,6 +185,51 @@ func (b *targetBuilderImpl) SetShoot(ctx context.Context, name string) TargetBui
 
 		t.Seed = ""
 		t.Shoot = shoot.Name
+
+		return nil
+	})
+
+	return b
+}
+
+func (b *targetBuilderImpl) SetTargetOptionSeed(ctx context.Context) TargetBuilder {
+	b.actions = append(b.actions, func(t *targetImpl) error {
+		if t.GardenName() == "" {
+			return ErrNoGardenTargeted
+		}
+
+		if t.ProjectName() == "" {
+			return ErrNoProjectTargeted
+		}
+
+		if t.ShootName() == "" {
+			return ErrNoShootTargeted
+		}
+
+		gardenClient, err := b.getGardenClient(t.GardenName())
+		if err != nil {
+			return err
+		}
+
+		shoot, err := gardenClient.FindShoot(ctx, t.ShootName(), t.ProjectName(), t.SeedName())
+		if err != nil {
+			return fmt.Errorf("failed to fetch shoot: %w", err)
+		}
+
+		seedName := *shoot.Spec.SeedName
+		if seedName == "" {
+			return fmt.Errorf("shoot %q has no seed in spec", err)
+		}
+
+		// validate that the seed exists
+		seed, err := b.validateSeed(ctx, t.GardenName(), seedName)
+		if err != nil {
+			return fmt.Errorf("failed to set target seed: %w", err)
+		}
+
+		t.Project = ""
+		t.Seed = seed.Name
+		t.Shoot = ""
 
 		return nil
 	})

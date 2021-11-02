@@ -44,7 +44,7 @@ type Manager interface {
 	// TargetShoot sets the shoot target configuration
 	// This implicitly unsets seed target configuration
 	// It will also configure appropriate project and seed values if not already set
-	TargetShoot(ctx context.Context, name string) error
+	TargetShoot(ctx context.Context, name string, targetOptionSeed bool) error
 	// UnsetTargetGarden unsets the garden target configuration
 	// This implicitly unsets project, shoot and seed target configuration
 	UnsetTargetGarden() (string, error)
@@ -243,7 +243,7 @@ func (m *managerImpl) UnsetTargetSeed() (string, error) {
 	return "", ErrNoSeedTargeted
 }
 
-func (m *managerImpl) TargetShoot(ctx context.Context, shootName string) error {
+func (m *managerImpl) TargetShoot(ctx context.Context, shootName string, targetOptionSeed bool) error {
 	tb := NewTargetBuilder(m.config, m.clientProvider)
 
 	currentTarget, err := m.CurrentTarget()
@@ -253,7 +253,13 @@ func (m *managerImpl) TargetShoot(ctx context.Context, shootName string) error {
 
 	tb.Init(currentTarget)
 
-	target, err := tb.SetShoot(ctx, shootName).Build()
+	tb.SetShoot(ctx, shootName)
+
+	if targetOptionSeed {
+		tb.SetTargetOptionSeed(ctx)
+	}
+
+	target, err := tb.Build()
 	if err != nil {
 		return err
 	}

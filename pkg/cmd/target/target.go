@@ -49,6 +49,10 @@ func NewCmdTarget(f util.Factory, o *TargetOptions) *cobra.Command {
 	cmd.AddCommand(NewCmdUnset(f, NewUnsetOptions(ioStreams)))
 	cmd.AddCommand(NewCmdView(f, NewViewOptions(ioStreams)))
 
+	cmd.Flags().BoolVar(&o.TargetOptionCluster, "target-cluster", false, "Default option when targeting a shoot")
+	cmd.Flags().BoolVar(&o.TargetOptionSeed, "target-seed", false, "Target seed that hosts shoot's control plane")
+	cmd.Flags().BoolVar(&o.TargetOptionCluster, "target-controlplane", false, "Target control plane namespace of a shoot inside it's seed cluster")
+
 	o.AddOutputFlags(cmd)
 
 	return cmd
@@ -70,7 +74,7 @@ func runCmdTarget(f util.Factory, o *TargetOptions) error {
 	case TargetKindSeed:
 		err = manager.TargetSeed(ctx, o.TargetName)
 	case TargetKindShoot:
-		err = manager.TargetShoot(ctx, o.TargetName)
+		err = manager.TargetShoot(ctx, o.TargetName, o.TargetOptionSeed)
 	default:
 		err = manager.TargetMatchPattern(ctx, o.TargetName)
 	}
@@ -85,7 +89,11 @@ func runCmdTarget(f util.Factory, o *TargetOptions) error {
 	}
 
 	if o.Output == "" {
-		fmt.Fprintf(o.IOStreams.Out, "Successfully targeted %s %q\n", o.Kind, o.TargetName)
+		if o.TargetOptionSeed {
+			fmt.Fprintf(o.IOStreams.Out, "Successfully targeted seed %q of provided shoot\n", currentTarget.SeedName())
+		} else {
+			fmt.Fprintf(o.IOStreams.Out, "Successfully targeted %s %q\n", o.Kind, o.TargetName)
+		}
 
 		return nil
 	}
@@ -177,6 +185,12 @@ type TargetOptions struct {
 	Kind TargetKind
 	// TargetName is the object name of the targeted kind
 	TargetName string
+	// TargetOptionCluster is the default option when targeting a shoot
+	TargetOptionCluster bool
+	// TargetOptionSeed target seed that hosts shoot's control plane
+	TargetOptionSeed bool
+	// TargetOptionControlplane target control plane namespace of a shoot inside it's seed cluster
+	TargetOptionControlplane bool
 }
 
 // NewTargetOptions returns initialized TargetOptions
@@ -248,6 +262,25 @@ func (o *TargetOptions) Validate() error {
 
 	if err := ValidateKind(o.Kind); err != nil {
 		return err
+	}
+
+	targetOption := ""
+	if o.TargetOptionCluster {
+		targetOption = "target-cluster"
+	}
+
+	if o.TargetOptionSeed {
+		targetOption = "target-seed"
+	}
+
+	if o.TargetOptionControlplane {
+		targetOption = "target-controlplane"
+	}
+
+	if targetOption != "" {
+		if o.Kind != TargetKindShoot && o.Kind != TargetKindPattern {
+			return fmt.Errorf("option %q can only be used when targeting a shoot", targetOption)
+		}
 	}
 
 	return nil

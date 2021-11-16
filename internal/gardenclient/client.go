@@ -50,7 +50,10 @@ type Client interface {
 	// GetSecret returns a Kubernetes namespace resource by name
 	GetSecret(ctx context.Context, namespaceName string, seedName string) (*corev1.Secret, error)
 
-	// GetRuntimeClient returns the underlying kubernetes runtime client
+	// GetConfigMap returns a Kubernetes ConfigMap by name
+	GetConfigMap(ctx context.Context, name string, namespaceName string) (*corev1.ConfigMap, error)
+
+	// RuntimeClient returns the underlying kubernetes runtime client
 	// TODO: Remove this when we switched all APIs to the new gardenclient
 	RuntimeClient() client.Client
 }
@@ -239,6 +242,17 @@ func (g *clientImpl) GetSecret(ctx context.Context, namespaceName string, seedNa
 	}
 
 	return &secret, nil
+}
+
+func (g *clientImpl) GetConfigMap(ctx context.Context, name string, namespaceName string) (*corev1.ConfigMap, error) {
+	configMap := corev1.ConfigMap{}
+	key := types.NamespacedName{Name: name, Namespace: namespaceName}
+
+	if err := g.c.Get(ctx, key, &configMap); err != nil {
+		return nil, err
+	}
+
+	return &configMap, nil
 }
 
 func (g *clientImpl) RuntimeClient() client.Client {

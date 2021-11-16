@@ -70,7 +70,9 @@ type Manager interface {
 	Configuration() *config.Config
 
 	// GardenClient returns a gardenClient for a garden cluster
-	GardenClient(name string) (gardenclient.Client, error)
+	GardenClient(gardenName string) (gardenclient.Client, error)
+	// GardenClientForKubeconfig returns a gardenClient for a kubeconfig file
+	GardenClientForKubeconfig(kubeconfigFile string, contextName string) (gardenclient.Client, error)
 }
 
 type managerImpl struct {
@@ -82,21 +84,27 @@ type managerImpl struct {
 
 var _ Manager = &managerImpl{}
 
-// GardenClient creates a new Garden client by creating a runtime client via the ClientProvider
-// it then wraps the runtime client and returns a Garden client
-func GardenClient(name string, config *config.Config, provider ClientProvider) (gardenclient.Client, error) {
+// GardenClient creates a new Garden client by creating a runtime client for provided
+// Garden via the ClientProvider it then wraps the runtime client and returns a Garden client
+func GardenClient(gardenName string, config *config.Config, provider ClientProvider) (gardenclient.Client, error) {
 	for _, g := range config.Gardens {
-		if g.Name == name {
-			runtimeClient, err := provider.FromFile(g.Kubeconfig)
-			if err != nil {
-				return nil, err
-			}
-
-			return gardenclient.NewGardenClient(runtimeClient), nil
+		if g.Name == gardenName {
+			return GardenClientForKubeConfig(g.Kubeconfig, g.Context, provider)
 		}
 	}
 
-	return nil, fmt.Errorf("targeted garden cluster %q is not configured", name)
+	return nil, fmt.Errorf("targeted garden cluster %q is not configured", gardenName)
+}
+
+// GardenClientForKubeConfig creates a new Garden client by creating a runtime client for provided
+// kubeconfig file via the ClientProvider it then wraps the runtime client and returns a Garden client
+func GardenClientForKubeConfig(kubeconfigFile string, contextName string, provider ClientProvider) (gardenclient.Client, error) {
+	runtimeClient, err := provider.FromFile(kubeconfigFile, contextName)
+	if err != nil {
+		return nil, err
+	}
+
+	return gardenclient.NewGardenClient(runtimeClient), nil
 }
 
 // NewManager returns a new manager
@@ -472,6 +480,10 @@ func (m *managerImpl) getTarget(t Target) (Target, error) {
 	return t, err
 }
 
-func (m *managerImpl) GardenClient(name string) (gardenclient.Client, error) {
-	return GardenClient(name, m.config, m.clientProvider)
+func (m *managerImpl) GardenClient(gardenName string) (gardenclient.Client, error) {
+	return GardenClient(gardenName, m.config, m.clientProvider)
+}
+
+func (m *managerImpl) GardenClientForKubeconfig(kubeconfigFile string, contextName string) (gardenclient.Client, error) {
+	return GardenClientForKubeConfig(kubeconfigFile, contextName, m.clientProvider)
 }

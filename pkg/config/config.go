@@ -10,6 +10,9 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strings"
+
+	v1 "k8s.io/api/core/v1"
 
 	"github.com/mitchellh/go-homedir"
 	"gopkg.in/yaml.v3"
@@ -30,6 +33,10 @@ type Garden struct {
 	// Name is a unique identifier of this Garden that can be used to target this Garden
 	// The value is considered when evaluating the garden matcher pattern
 	Name string `yaml:"name"`
+	// Identity is the identity of this garden. Should not be modified by the user
+	Identity string `yaml:"identity"`
+	// Context if set, context overwrites the current-context of the cluster kubeconfig
+	Context string `yaml:"context"`
 	// Kubeconfig holds the path for the kubeconfig of the garden cluster
 	Kubeconfig string `yaml:"kubeconfig"`
 	// Aliases is a list of alternative names that can be used to target this Garden
@@ -173,4 +180,61 @@ func (config *Config) MatchPattern(value string) (*PatternMatch, error) {
 	}
 
 	return nil, errors.New("the provided value does not match any pattern")
+}
+
+// AddGarden adds a new Garden to the configuration
+// It uses the config map to add additional configuration
+func (config *Config) AddGarden(name string, kubeconfigFile string, contextName string, clusterConfig *v1.ConfigMap, configFilename string) error {
+	// TODO: Global match patterns
+	// TODO: handle no aliases etc.
+	for _, g := range config.Gardens {
+		if g.Name == name {
+			return fmt.Errorf("could not add Garden: Garden with name %q already exists in config", name)
+		}
+	}
+
+	aliasesString := clusterConfig.Data["aliases"]
+	aliases := strings.Split(aliasesString, "\n")
+	aliases = removeLastStrIfEmpty(aliases)
+
+	identity := clusterConfig.Data["identity"]
+	garden := Garden{
+		Name:       name,
+		Identity:   identity,
+		Context:    contextName,
+		Kubeconfig: kubeconfigFile,
+		Aliases:    aliases,
+	}
+	config.Gardens = append(config.Gardens, garden)
+
+	matchPatternsString := clusterConfig.Data["global.matchPatterns"]
+	matchPatterns := strings.Split(matchPatternsString, "\n")
+	matchPatterns = removeLastStrIfEmpty(matchPatterns)
+	config.MatchPatterns = append(config.MatchPatterns, matchPatterns...)
+	config.MatchPatterns = removeDuplicateStr(config.MatchPatterns)
+
+	return config.SaveToFile(configFilename)
+}
+
+func removeLastStrIfEmpty(strSlice []string) []string {
+	if len(strSlice) > 0 && strSlice[len(strSlice)-1] == "" {
+		strSlice = strSlice[:len(strSlice)-1]
+	}
+
+	return strSlice
+}
+
+func removeDuplicateStr(strSlice []string) []string {
+	allKeys := make(map[string]bool)
+	list := []string{}
+
+	for _, item := range strSlice {
+		if _, value := allKeys[item]; !value {
+			allKeys[item] = true
+
+			list = append(list, item)
+		}
+	}
+
+	return list
 }

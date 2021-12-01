@@ -24,6 +24,7 @@ func NewCmdConfig(f util.Factory, o *ConfigOptions) *cobra.Command {
 
 	cmd.AddCommand(NewCmdConfigView(f, NewViewOptions(ioStreams)))
 	cmd.AddCommand(NewCmdConfigAddGarden(f, NewAddOptions(ioStreams)))
+	cmd.AddCommand(NewCmdConfigSetGarden(f, NewSetGardenOptions(ioStreams)))
 
 	return cmd
 }

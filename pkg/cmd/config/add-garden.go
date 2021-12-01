@@ -25,7 +25,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewCmdConfigAddGarden returns a new (config) view command.
+// NewCmdConfigAddGarden returns a new (config) add command.
 func NewCmdConfigAddGarden(f util.Factory, o *AddOptions) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add-garden",

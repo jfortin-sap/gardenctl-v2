@@ -12,6 +12,8 @@ import (
 	"regexp"
 	"strings"
 
+	"k8s.io/component-base/cli/flag"
+
 	v1 "k8s.io/api/core/v1"
 
 	"github.com/mitchellh/go-homedir"
@@ -180,6 +182,52 @@ func (config *Config) MatchPattern(value string) (*PatternMatch, error) {
 	}
 
 	return nil, errors.New("the provided value does not match any pattern")
+}
+
+// SetGarden adds or updates a Garden in the configuration
+func (config *Config) SetGarden(name string, kubeconfigFile flag.StringFlag, contextName flag.StringFlag, identity flag.StringFlag, aliases []string, configFilename string) error {
+	var garden *Garden
+	for i, g := range config.Gardens {
+		if g.Name == name {
+			garden = &config.Gardens[i]
+			break
+		}
+	}
+
+	if garden.Name != "" {
+		// update existing garden in configuration
+		if kubeconfigFile.Provided() {
+			garden.Kubeconfig = kubeconfigFile.Value()
+		}
+
+		if contextName.Provided() {
+			garden.Context = contextName.Value()
+		}
+
+		if identity.Provided() {
+			garden.Identity = identity.Value()
+		}
+
+		if aliases != nil {
+			if len(aliases[0]) > 0 {
+				garden.Aliases = aliases
+			} else {
+				garden.Aliases = []string{}
+			}
+		}
+	} else {
+		newGarden := Garden{
+			Name:       name,
+			Identity:   identity.Value(),
+			Context:    contextName.Value(),
+			Kubeconfig: kubeconfigFile.Value(),
+			Aliases:    aliases,
+		}
+
+		config.Gardens = append(config.Gardens, newGarden)
+	}
+
+	return config.SaveToFile(configFilename)
 }
 
 // AddGarden adds a new Garden to the configuration
